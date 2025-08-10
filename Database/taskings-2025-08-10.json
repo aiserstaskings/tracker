@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "exportedAt": "2025-08-10T05:32:34.174Z",
+  "taskings": [
+    {
+      "id": "cf5fecbd543472f8",
+      "startDate": "2025-07-31",
+      "endDate": "2025-07-31",
+      "officerIds": [
+        "12425MN-000488"
+      ],
+      "officerNames": [
+        "Aura A. Guda"
+      ],
+      "title": "gawin mo to",
+      "start": "",
+      "end": "",
+      "location": "",
+      "notes": "gawasd",
+      "done": true,
+      "doneAt": "2025-08-10T05:21:20.659Z",
+      "doneBy": "12425MN-000488"
+    },
+    {
+      "id": "5f720dbd18de76db",
+      "startDate": "2025-07-31",
+      "endDate": "2025-08-13",
+      "officerIds": [
+        "12425MN-000532",
+        "12425MN-000511"
+      ],
+      "officerNames": [
+        "Samantha Julia H. Flores",
+        "Micaela Joie Arquelada"
+      ],
+      "title": "awdawd",
+      "start": "",
+      "end": "",
+      "location": "awd",
+      "notes": "awd",
+      "done": true,
+      "doneAt": "2025-08-10T05:21:41.555Z",
+      "doneBy": "12425MN-000532"
+    },
+    {
+      "id": "b029ffd65799f431",
+      "startDate": "2025-07-31",
+      "endDate": "2025-07-31",
+      "officerIds": [
+        "12324MN-000061"
+      ],
+      "officerNames": [
+        "Gyvann C. Gaspar"
+      ],
+      "title": "notes",
+      "start": "",
+      "end": "",
+      "location": "",
+      "notes": "gainwmo",
+      "checklist": [
+        {
+          "text": "sumbit",
+          "done": true
+        },
+        {
+          "text": "taenamo",
+          "done": true
+        }
+      ],
+      "done": true,
+      "doneAt": "2025-08-10T05:28:11.391Z",
+      "doneBy": "12324MN-000061"
+    },
+    {
+      "id": "272c79f0d17252f4",
+      "startDate": "2025-07-31",
+      "endDate": "2025-07-31",
+      "officerIds": [
+        "12324MN-000080",
+        "12324MN-000094"
+      ],
+      "officerNames": [
+        "Kate Yasmine A. Beltrano",
+        "Charles Gabriel A. Martinez"
+      ],
+      "title": "posting",
+      "start": "",
+      "end": "",
+      "location": "",
+      "notes": "posting for today",
+      "checklist": [
+        {
+          "text": "IPOST MO",
+          "done": false
+        },
+        {
+          "text": "ETO NA",
+          "done": false
+        },
+        {
+          "text": "ASAN NA",
+          "done": false
+        }
+      ]
+    }
+  ]
+}
