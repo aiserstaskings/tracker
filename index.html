@@ -2543,6 +2543,11 @@ async function findLatestTaskingsUrl() {
             // try to pull officers from Database/* when hosted
             syncOfficersFromRepo();
         }
+        // If there are no duty logs yet, try to hydrate from Database/all-duty-logs-YYYY-MM-DD.xlsx
+        const hasAnyLogs = listAllLogDateKeys().length > 0;
+        if (!hasAnyLogs) {
+            syncAllDutyLogsFromRepo();
+        }
     } catch {}
 })();
 
@@ -2558,6 +2563,109 @@ function clearSyncStatus() {
     if (!el) return;
     el.textContent = '';
     el.style.display = 'none';
+}
+
+// ============================
+// Sync All Duty Logs from repo
+// ============================
+async function syncAllDutyLogsFromRepo() {
+    try {
+        const url = await findLatestAllDutyLogsUrl();
+        if (!url) return false;
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) return false;
+        const ab = await res.arrayBuffer();
+        const wb = XLSX.read(new Uint8Array(ab), { type: 'array' });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        if (!rows || rows.length < 2) return false;
+
+        const header = rows[0].map(h => String(h || '').toLowerCase());
+        const hasDate = header.includes('date');
+        const hasNewFormat = header.includes('time in') || header.includes('timein');
+
+        const logsByDate = {};
+        for (let i = 1; i < rows.length; i++) {
+            const row = rows[i];
+            if (!row || row.length === 0) continue;
+            let logDate = '';
+            let logEntry = {};
+            if (hasDate) {
+                const dateIdx = header.indexOf('date');
+                logDate = String(row[dateIdx] || '');
+                if (hasNewFormat) {
+                    const idxTimeIn = header.findIndex(h => h === 'time in' || h === 'timein');
+                    const idxTimeOut = header.findIndex(h => h === 'time out' || h === 'timeout');
+                    const idxDuration = header.indexOf('duration');
+                    const idxOfficer = header.indexOf('officer id');
+                    const idxName = header.indexOf('name');
+                    const idxSection = header.indexOf('section');
+                    const idxAction = header.indexOf('action');
+                    const timeIn = String(row[idxTimeIn] ?? '');
+                    const timeOut = String(row[idxTimeOut] ?? '');
+                    const durationStr = String(row[idxDuration] ?? '');
+                    let durationSec = 0;
+                    if (durationStr && /^\d{2}:\d{2}:\d{2}$/.test(durationStr)) {
+                        const parts = durationStr.split(':').map(Number);
+                        durationSec = parts[0]*3600 + parts[1]*60 + parts[2];
+                    }
+                    logEntry = {
+                        timeIn,
+                        timeOut,
+                        durationSec,
+                        officerId: String(row[idxOfficer] ?? ''),
+                        name: String(row[idxName] ?? ''),
+                        section: String(row[idxSection] ?? ''),
+                        action: String(row[idxAction] ?? '')
+                    };
+                }
+            }
+            if (logDate && Object.keys(logEntry).length > 0) {
+                if (!logsByDate[logDate]) logsByDate[logDate] = [];
+                logsByDate[logDate].push(logEntry);
+            }
+        }
+        Object.keys(logsByDate).forEach(dateStr => {
+            const [year, month, day] = dateStr.split('-').map(Number);
+            const key = `dutyLogs-${year}-${month}-${day}`;
+            const existingLogs = loadLogsByKey(key);
+            const mergedLogs = [...existingLogs, ...logsByDate[dateStr]];
+            localStorage.setItem(key, JSON.stringify(mergedLogs));
+        });
+        initHistoryDatePicker();
+        renderHistory();
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
+
+async function findLatestAllDutyLogsUrl() {
+    const today = new Date();
+    for (let i = 0; i < 365; i++) {
+        const dt = new Date(today);
+        dt.setDate(today.getDate() - i);
+        const y = dt.getFullYear();
+        const m = String(dt.getMonth() + 1).padStart(2, '0');
+        const d = String(dt.getDate()).padStart(2, '0');
+        const seg = `${y}-${m}-${d}`;
+        const candidates = [
+            `Database/all-duty-logs-${seg}.xlsx`,
+            `Database/all_duty_logs_${seg}.xlsx`,
+            `Database/ALL-DUTY-LOGS-${seg}.xlsx`
+        ];
+        for (const c of candidates) {
+            try {
+                let r = await fetch(c, { method: 'HEAD', cache: 'no-store' });
+                if (!r.ok) {
+                    r = await fetch(c, { method: 'GET', cache: 'no-store' });
+                    if (!r.ok) continue;
+                }
+                return c + '?cb=' + Date.now();
+            } catch (_) { /* continue */ }
+        }
+    }
+    return null;
 }
 </script>
 <!-- Extra libs for embedded barcode generation -->
