@@ -97,6 +97,66 @@ function loadStudents() {
     return [...SAMPLE_STUDENTS];
 }
 
+// Try to hydrate students from Database/* when running from GitHub Pages and local storage is empty
+async function syncStudentsFromRepo() {
+    try {
+        const candidateUrls = [
+            'Database/officers.xlsx',
+            'Database/officers.xls',
+            'Database/officers.csv',
+            'Database/Officer%20Database.xlsx',
+            'Database/OFFICER%20DATABASE.xlsx',
+            'Database/Officer_Database.xlsx',
+            'Database/OFFICERS.xlsx'
+        ];
+        let url = null;
+        for (const u of candidateUrls) {
+            try {
+                const res = await fetch(u + '?cb=' + Date.now(), { cache: 'no-store', method: 'GET' });
+                if (res.ok) { url = u; break; }
+            } catch (_) { /* try next */ }
+        }
+        if (!url) return false;
+
+        if (url.toLowerCase().endsWith('.csv')) {
+            const text = await (await fetch(url + '?cb=' + Date.now(), { cache: 'no-store' })).text();
+            const rows = text.split(/\r?\n/).map(r => r.split(',').map(c => c.trim()));
+            const header = (rows[0] || []).map(h => h.toLowerCase());
+            const idxId = header.findIndex(h => ['student id','id','officer id','studentid'].includes(h));
+            const idxName = header.findIndex(h => ['student name','name','studentname'].includes(h));
+            const idxSection = header.findIndex(h => ['section','course','dept'].includes(h));
+            const list = [];
+            for (let i = 1; i < rows.length; i++) {
+                const r = rows[i]; if (!r || r.length === 0) continue;
+                const studentId = String(r[idxId] || '').trim(); if (!studentId) continue;
+                list.push({ studentId, studentName: String(r[idxName] || '').trim(), section: String(r[idxSection] || '').trim() });
+            }
+            if (list.length > 0) localStorage.setItem('barcodeStudents', JSON.stringify(list));
+            return list.length > 0;
+        } else {
+            const ab = await (await fetch(url + '?cb=' + Date.now(), { cache: 'no-store' })).arrayBuffer();
+            const wb = XLSX.read(new Uint8Array(ab), { type: 'array' });
+            const sheet = wb.Sheets[wb.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            if (!rows || rows.length < 2) return false;
+            const header = rows[0].map(h => String(h || '').toLowerCase().trim());
+            const idxId = header.findIndex(h => ['student id','id','officer id','studentid'].includes(h));
+            const idxName = header.findIndex(h => ['student name','name','studentname'].includes(h));
+            const idxSection = header.findIndex(h => ['section','course','dept'].includes(h));
+            const list = [];
+            for (let i = 1; i < rows.length; i++) {
+                const r = rows[i]; if (!r || r.length === 0) continue;
+                const studentId = String(r[idxId] || '').trim(); if (!studentId) continue;
+                list.push({ studentId, studentName: String(r[idxName] || '').trim(), section: String(r[idxSection] || '').trim() });
+            }
+            if (list.length > 0) localStorage.setItem('barcodeStudents', JSON.stringify(list));
+            return list.length > 0;
+        }
+    } catch (_) {
+        return false;
+    }
+}
+
 function ensureUniqueIds(students) {
     return students.map(s => {
         s.uniqueId = s.studentId;
@@ -105,6 +165,18 @@ function ensureUniqueIds(students) {
 }
 
 let students = ensureUniqueIds(loadStudents());
+
+// Auto-sync from Database if empty
+(async function autoSyncStudents(){
+    try {
+        if (!students || students.length === 0) {
+            const ok = await syncStudentsFromRepo();
+            if (ok) {
+                students = ensureUniqueIds(loadStudents());
+            }
+        }
+    } catch(_) {}
+})();
 
 function groupBySection(students) {
     const sections = {};

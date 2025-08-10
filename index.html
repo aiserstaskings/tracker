@@ -142,11 +142,20 @@
             <button class="btn btn-outline-success" id="taskingsSyncRepoBtn" title="Load Database/taskings.json if present">Sync From Database</button>
             <span id="taskingsSyncStatus" class="small text-muted" style="display:none;"></span>
             <button class="btn btn-primary" id="taskingsAddBtn">Add Tasking</button>
+             <button class="btn btn-primary" id="eventsAddBtn">Add Event</button>
           </div>
         </div>
       </div>
       <div class="card">
         <div class="card-body">
+          <!-- Events bar -->
+          <div id="eventsBarContainer" class="mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h3 class="h6 mb-0">Events</h3>
+              <div class="small text-muted" id="eventsBarHint"></div>
+            </div>
+            <div id="eventsBar" class="d-flex flex-wrap gap-2"></div>
+          </div>
           <div class="table-responsive">
             <table class="table table-bordered mb-0 taskings-calendar" id="taskingsCalendar">
               <thead class="table-light">
@@ -165,6 +174,58 @@
           </div>
         </div>
       </div>
+
+      <!-- Event Modal -->
+      <div class="modal fade" id="eventsModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="eventsModalTitle">Add Event</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="eventsForm">
+              <div class="modal-body">
+                <input type="hidden" id="eventId" />
+                <div class="row g-2 mb-2">
+                  <div class="col-md-6">
+                    <label for="eventTitle" class="form-label">Event Title</label>
+                    <input type="text" class="form-control" id="eventTitle" placeholder="e.g., Foundation Day" required />
+                  </div>
+                  <div class="col-md-3">
+                    <label for="eventStartDate" class="form-label">Start date</label>
+                    <input type="date" class="form-control" id="eventStartDate" required />
+                  </div>
+                  <div class="col-md-3">
+                    <label for="eventEndDate" class="form-label">End date</label>
+                    <input type="date" class="form-control" id="eventEndDate" />
+                  </div>
+                </div>
+                <div class="row g-2 mb-3">
+                  <div class="col-md-6">
+                    <label for="eventLocation" class="form-label">Location</label>
+                    <input type="text" class="form-control" id="eventLocation" placeholder="Optional" />
+                  </div>
+                  <div class="col-md-6">
+                    <label for="eventNotes" class="form-label">Notes</label>
+                    <input type="text" class="form-control" id="eventNotes" placeholder="Optional" />
+                  </div>
+                </div>
+                <hr/>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <label class="form-label mb-0">Taskings in this Event</label>
+                  <button type="button" class="btn btn-sm btn-outline-primary" id="eventAddSubtaskBtn">Add Tasking</button>
+                </div>
+                <div id="eventSubtasks" class="d-flex flex-column gap-3"></div>
+                <small class="text-muted">Event dates apply to all taskings. Each tasking can have its own title and time(s) and a set of assigned officers.</small>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="eventSaveBtn">Save Event</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
       <input type="file" id="taskingsImportInput" accept=".json" style="display:none;" />
 
       <!-- Tasking Modal -->
@@ -178,6 +239,7 @@
             <form id="taskingsForm">
               <div class="modal-body">
                 <input type="hidden" id="taskId" />
+                <input type="hidden" id="taskEventId" />
                 <div class="row g-2">
                   <div class="col-md-6">
                     <label for="taskStartDate" class="form-label">Start date</label>
@@ -291,6 +353,41 @@
             </div>
             <div class="modal-footer">
               <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Event Calendar Modal -->
+      <div class="modal fade" id="eventCalendarModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="eventCalendarTitle">Event</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <div class="table-responsive">
+                <table class="table table-bordered mb-0 taskings-calendar" id="eventCalendarTable">
+                  <thead class="table-light">
+                    <tr>
+                      <th class="text-center">Sun</th>
+                      <th class="text-center">Mon</th>
+                      <th class="text-center">Tue</th>
+                      <th class="text-center">Wed</th>
+                      <th class="text-center">Thu</th>
+                      <th class="text-center">Fri</th>
+                      <th class="text-center">Sat</th>
+                    </tr>
+                  </thead>
+                  <tbody id="eventCalendarBody"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary me-auto" id="eventEditBtn">Edit</button>
+              <button type="button" class="btn btn-outline-danger" id="eventDeleteBtn">Delete</button>
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
             </div>
           </div>
         </div>
@@ -452,6 +549,66 @@ function loadOfficers() {
         }
     }
     return [];
+}
+
+// Attempt to load officers from Database/ when no local data is present (e.g., GitHub Pages)
+async function syncOfficersFromRepo() {
+    try {
+        const candidateUrls = [
+            'Database/officers.xlsx',
+            'Database/officers.xls',
+            'Database/officers.csv',
+            'Database/Officer%20Database.xlsx',
+            'Database/OFFICER%20DATABASE.xlsx',
+            'Database/Officer_Database.xlsx',
+            'Database/OFFICERS.xlsx'
+        ];
+        let url = null;
+        for (const u of candidateUrls) {
+            try {
+                const res = await fetch(u + '?cb=' + Date.now(), { cache: 'no-store', method: 'GET' });
+                if (res.ok) { url = u; break; }
+            } catch (_) { /* try next */ }
+        }
+        if (!url) return false;
+
+        if (url.toLowerCase().endsWith('.csv')) {
+            const text = await (await fetch(url + '?cb=' + Date.now(), { cache: 'no-store' })).text();
+            const rows = text.split(/\r?\n/).map(r => r.split(',').map(c => c.trim()));
+            const header = (rows[0] || []).map(h => h.toLowerCase());
+            const idxId = header.findIndex(h => ['student id','id','officer id','studentid'].includes(h));
+            const idxName = header.findIndex(h => ['student name','name','studentname'].includes(h));
+            const idxSection = header.findIndex(h => ['section','course','dept'].includes(h));
+            const list = [];
+            for (let i = 1; i < rows.length; i++) {
+                const r = rows[i]; if (!r || r.length === 0) continue;
+                const studentId = String(r[idxId] || '').trim(); if (!studentId) continue;
+                list.push({ studentId, studentName: String(r[idxName] || '').trim(), section: String(r[idxSection] || '').trim() });
+            }
+            if (list.length > 0) localStorage.setItem('barcodeStudents', JSON.stringify(list));
+            return list.length > 0;
+        } else {
+            const ab = await (await fetch(url + '?cb=' + Date.now(), { cache: 'no-store' })).arrayBuffer();
+            const wb = XLSX.read(new Uint8Array(ab), { type: 'array' });
+            const sheet = wb.Sheets[wb.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            if (!rows || rows.length < 2) return false;
+            const header = rows[0].map(h => String(h || '').toLowerCase().trim());
+            const idxId = header.findIndex(h => ['student id','id','officer id','studentid'].includes(h));
+            const idxName = header.findIndex(h => ['student name','name','studentname'].includes(h));
+            const idxSection = header.findIndex(h => ['section','course','dept'].includes(h));
+            const list = [];
+            for (let i = 1; i < rows.length; i++) {
+                const r = rows[i]; if (!r || r.length === 0) continue;
+                const studentId = String(r[idxId] || '').trim(); if (!studentId) continue;
+                list.push({ studentId, studentName: String(r[idxName] || '').trim(), section: String(r[idxSection] || '').trim() });
+            }
+            if (list.length > 0) localStorage.setItem('barcodeStudents', JSON.stringify(list));
+            return list.length > 0;
+        }
+    } catch (_) {
+        return false;
+    }
 }
 
 // --- Duty Logs Storage ---
@@ -1129,6 +1286,21 @@ document.getElementById('importHistoryInput').addEventListener('change', functio
 const TASKINGS_STORAGE_KEY = 'dutyTaskings-v1';
 let taskOfficerSelection = new Set();
 
+// Events storage
+const EVENTS_STORAGE_KEY = 'dutyEvents-v1';
+function loadEvents() {
+    const raw = localStorage.getItem(EVENTS_STORAGE_KEY);
+    if (!raw) return [];
+    try { return JSON.parse(raw); } catch { return []; }
+}
+function saveEvents(items) {
+    localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(items));
+}
+function getEventById(eventId) {
+    if (!eventId) return null;
+    return loadEvents().find(e => e.id === eventId) || null;
+}
+
 function loadTaskings() {
     const raw = localStorage.getItem(TASKINGS_STORAGE_KEY);
     if (!raw) return [];
@@ -1254,7 +1426,8 @@ function renderTaskingsCalendar() {
     const gridEnd = new Date(lastDay);
     gridEnd.setDate(lastDay.getDate() + (6 - lastDay.getDay()));
 
-    const all = normalizeLegacyTaskings(loadTaskings());
+    const allTasks = normalizeLegacyTaskings(loadTaskings());
+    const allEvents = loadEvents();
     tbody.innerHTML = '';
 
     // Keep a map of date ISO -> day container for later highlighting
@@ -1280,7 +1453,32 @@ function renderTaskingsCalendar() {
             // Register this day's container
             dayMap[dateStr] = dayDiv;
 
-            const dayTasks = all.filter(t => isDateWithinRange(dateStr, t.startDate, t.endDate) && (!filterOfficerId || (t.officerIds || [t.officerId]).includes(filterOfficerId)));
+            // 1) Render event chips (grouped by title) for this day
+            const dayEvents = allEvents.filter(ev => {
+                if (!isDateWithinRange(dateStr, ev.startDate, ev.endDate || ev.startDate)) return false;
+                if (!filterOfficerId) return true;
+                // If filtering by officer, only show events that contain at least one tasking for that officer
+                return allTasks.some(t => t.eventId === ev.id && (t.officerIds || [t.officerId]).includes(filterOfficerId));
+            });
+            const byTitle = new Map();
+            dayEvents.forEach(evObj => {
+                const key = (evObj.title || '').trim().toLowerCase();
+                if (!byTitle.has(key)) byTitle.set(key, []);
+                byTitle.get(key).push(evObj);
+            });
+            byTitle.forEach((eventsWithSameTitle, key) => {
+                const displayTitle = eventsWithSameTitle[0]?.title || 'Event';
+                const chip = document.createElement('a');
+                chip.href = 'javascript:void(0)';
+                chip.className = 'task-chip';
+                chip.title = `${displayTitle}`;
+                chip.textContent = `${displayTitle}`;
+                chip.addEventListener('click', (e) => { e.stopPropagation(); openEventCalendarByTitle(displayTitle); });
+                dayDiv.appendChild(chip);
+            });
+
+            // 2) Render standalone taskings (those without an event)
+            const dayTasks = allTasks.filter(t => !t.eventId && isDateWithinRange(dateStr, t.startDate, t.endDate) && (!filterOfficerId || (t.officerIds || [t.officerId]).includes(filterOfficerId)));
             dayTasks.sort((a,b) => (a.start || '').localeCompare(b.start || ''));
             dayTasks.forEach(t => {
                 const chip = document.createElement('a');
@@ -1308,7 +1506,7 @@ function renderTaskingsCalendar() {
     }
 
     // Highlight each day for multi-day tasks that are visible in the current grid
-    const visibleTasks = all.filter(t => (!filterOfficerId || (t.officerIds || [t.officerId]).includes(filterOfficerId)) && !t.done);
+    const visibleTasks = allTasks.filter(t => (!filterOfficerId || (t.officerIds || [t.officerId]).includes(filterOfficerId)) && !t.done);
     visibleTasks.forEach(t => {
         const taskStart = new Date(t.startDate);
         const taskEnd = new Date(t.endDate || t.startDate);
@@ -1325,6 +1523,262 @@ function renderTaskingsCalendar() {
             iter.setDate(iter.getDate() + 1);
         }
     });
+
+    // Highlight ranges for events as well
+    allEvents.forEach(evObj => {
+        const eventStart = new Date(evObj.startDate);
+        const eventEnd = new Date(evObj.endDate || evObj.startDate);
+        if (isNaN(eventStart) || isNaN(eventEnd)) return;
+        if (eventEnd < gridStart || eventStart > gridEnd) return;
+        const start = eventStart > gridStart ? new Date(eventStart) : new Date(gridStart);
+        const end = eventEnd < gridEnd ? new Date(eventEnd) : new Date(gridEnd);
+        const iter = new Date(start);
+        while (iter <= end) {
+            const iso = iter.toISOString().split('T')[0];
+            const host = dayMap[iso];
+            if (host) host.classList.add('range-highlight');
+            iter.setDate(iter.getDate() + 1);
+        }
+    });
+}
+
+function renderEventsBar() {
+    const container = document.getElementById('eventsBar');
+    const hint = document.getElementById('eventsBarHint');
+    if (!container) return;
+    const events = loadEvents();
+    container.innerHTML = '';
+    if (hint) hint.textContent = events.length ? 'Click an event to view its taskings calendar' : 'No events yet';
+    // Group by title so only one button per event title is shown
+    const byTitle = new Map();
+    events.forEach(ev => {
+        const key = (ev.title || '').trim().toLowerCase();
+        if (!byTitle.has(key)) byTitle.set(key, []);
+        byTitle.get(key).push(ev);
+    });
+    Array.from(byTitle.values())
+      .sort((a,b) => (a[0]?.title || '').localeCompare(b[0]?.title || ''))
+      .forEach(group => {
+        const title = group[0]?.title || 'Event';
+        const starts = group.map(e => e.startDate).filter(Boolean).sort();
+        const ends = group.map(e => e.endDate || e.startDate).filter(Boolean).sort();
+        const startRange = starts[0] || '';
+        const endRange = ends[ends.length-1] || startRange;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-sm btn-outline-dark';
+        btn.textContent = startRange ? `${title} (${startRange}${endRange && endRange !== startRange ? ' → ' + endRange : ''})` : title;
+        btn.title = `${title}`;
+        btn.addEventListener('click', () => openEventCalendarByTitle(title));
+        container.appendChild(btn);
+      });
+}
+
+function openEventCalendar(eventId) {
+    const ev = getEventById(eventId);
+    if (!ev) return;
+    document.getElementById('eventCalendarTitle').textContent = `${ev.title} — ${ev.startDate}${ev.endDate && ev.endDate !== ev.startDate ? ' → ' + ev.endDate : ''}`;
+    renderEventCalendarGrid(ev);
+    const modal = new bootstrap.Modal(document.getElementById('eventCalendarModal'));
+    // Wire delete button for this specific eventId
+    const delBtn = document.getElementById('eventDeleteBtn');
+    if (delBtn) {
+        delBtn.style.display = '';
+        delBtn.onclick = () => deleteEventsByTitleOrId({ eventId });
+    }
+    // Wire edit to open eventsModal prefilled for this event
+    const editBtn = document.getElementById('eventEditBtn');
+    if (editBtn) {
+        editBtn.style.display = '';
+        editBtn.onclick = () => {
+            const instance = bootstrap.Modal.getInstance(document.getElementById('eventCalendarModal'));
+            if (instance) instance.hide();
+            setTimeout(() => openEventsModalForEdit(eventId), 150);
+        };
+    }
+    modal.show();
+}
+
+function openEventCalendarByTitle(title) {
+    const events = loadEvents().filter(e => (e.title || '').trim().toLowerCase() === (title || '').trim().toLowerCase());
+    if (!events || events.length === 0) return;
+    const startDate = events.map(e => e.startDate).filter(Boolean).sort()[0] || events[0].startDate;
+    const endDate = events.map(e => e.endDate || e.startDate).filter(Boolean).sort().slice(-1)[0] || startDate;
+    document.getElementById('eventCalendarTitle').textContent = `${title} — ${startDate}${endDate && endDate !== startDate ? ' → ' + endDate : ''}`;
+    renderEventCalendarGridForEvents(events);
+    const modal = new bootstrap.Modal(document.getElementById('eventCalendarModal'));
+    // Wire delete button to remove all events with this title
+    const delBtn = document.getElementById('eventDeleteBtn');
+    if (delBtn) {
+        delBtn.style.display = '';
+        delBtn.onclick = () => deleteEventsByTitleOrId({ title });
+    }
+    // Wire edit to open a new event (prefill using the first event in the group)
+    const editBtn = document.getElementById('eventEditBtn');
+    if (editBtn) {
+        editBtn.style.display = '';
+        const first = events[0];
+        editBtn.onclick = () => {
+            const instance = bootstrap.Modal.getInstance(document.getElementById('eventCalendarModal'));
+            if (instance) instance.hide();
+            setTimeout(() => openEventsModalForEdit(first.id), 150);
+        };
+    }
+    modal.show();
+}
+
+function renderEventCalendarGrid(ev) {
+    const tbody = document.getElementById('eventCalendarBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    const start = new Date(ev.startDate);
+    const end = new Date(ev.endDate || ev.startDate);
+    if (isNaN(start)) return;
+    if (isNaN(end)) end.setTime(start.getTime());
+
+    // Build grid covering full weeks within event range
+    const gridStart = new Date(start);
+    gridStart.setDate(start.getDate() - start.getDay());
+    const gridEnd = new Date(end);
+    gridEnd.setDate(end.getDate() + (6 - end.getDay()));
+
+    const all = normalizeLegacyTaskings(loadTaskings()).filter(t => t.eventId === ev.id);
+    let cursor = new Date(gridStart);
+    while (cursor <= gridEnd) {
+        const tr = document.createElement('tr');
+        for (let d = 0; d < 7; d++) {
+            const td = document.createElement('td');
+            const dateStr = cursor.toISOString().split('T')[0];
+            const inEvent = isDateWithinRange(dateStr, ev.startDate, ev.endDate || ev.startDate);
+            const dayDiv = document.createElement('div');
+            dayDiv.className = `calendar-day ${inEvent ? '' : 'muted'}`;
+            const dateLabel = document.createElement('div');
+            dateLabel.className = 'calendar-date';
+            dateLabel.textContent = String(cursor.getDate());
+            dayDiv.appendChild(dateLabel);
+            const dayTasks = all.filter(t => isDateWithinRange(dateStr, t.startDate, t.endDate));
+            dayTasks.sort((a,b) => (a.start || '').localeCompare(b.start || ''));
+            dayTasks.forEach(t => {
+                const chip = document.createElement('a');
+                chip.href = 'javascript:void(0)';
+                chip.className = 'task-chip';
+                const timeRange = (t.start || t.end) ? `${t.start || ''}${t.end ? ' - ' + t.end : ''}` : '';
+                const firstNames = (t.officerNames || (t.officerName ? [t.officerName] : [])).map(n => (n || '').split(' ')[0]).join(', ');
+                chip.title = `${t.title}${timeRange ? ` • ${timeRange}` : ''}${t.location ? `\n${t.location}` : ''}`.trim();
+                chip.textContent = `${t.start ? t.start + ' ' : ''}${t.title} — ${firstNames}`;
+                if (t.done) {
+                    chip.classList.add('text-decoration-line-through','text-muted');
+                    chip.title += `\nCompleted`;
+                }
+                chip.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    const modalEl = document.getElementById('eventCalendarModal');
+                    const instance = bootstrap.Modal.getInstance(modalEl);
+                    if (instance) instance.hide();
+                    setTimeout(() => openTaskDetailsModal(t.id), 150);
+                });
+                dayDiv.appendChild(chip);
+            });
+            td.appendChild(dayDiv);
+            tr.appendChild(td);
+            cursor.setDate(cursor.getDate() + 1);
+        }
+        tbody.appendChild(tr);
+    }
+}
+
+function deleteEventsByTitleOrId({ title, eventId }) {
+    const events = loadEvents();
+    let filteredEvents;
+    if (eventId) {
+        const ev = events.find(e => e.id === eventId);
+        if (!ev) return;
+        const confirmText = `Delete event "${ev.title}" and all its taskings?`;
+        if (!confirm(confirmText)) return;
+        filteredEvents = events.filter(e => e.id !== eventId);
+        // Remove taskings under this eventId
+        const t = loadTaskings().filter(x => x.eventId !== eventId);
+        saveTaskings(t);
+    } else if (title) {
+        const sameTitle = events.filter(e => (e.title || '').trim().toLowerCase() === (title || '').trim().toLowerCase());
+        if (sameTitle.length === 0) return;
+        const confirmText = `Delete all "${title}" event instances and their taskings?`;
+        if (!confirm(confirmText)) return;
+        const idSet = new Set(sameTitle.map(e => e.id));
+        filteredEvents = events.filter(e => !idSet.has(e.id));
+        const t = loadTaskings().filter(x => !idSet.has(x.eventId));
+        saveTaskings(t);
+    } else {
+        return;
+    }
+    saveEvents(filteredEvents);
+    renderTaskingsCalendar();
+    renderEventsBar();
+    // Close the event calendar modal
+    const modalEl = document.getElementById('eventCalendarModal');
+    const instance = bootstrap.Modal.getInstance(modalEl);
+    if (instance) instance.hide();
+}
+
+function renderEventCalendarGridForEvents(eventsList) {
+    const tbody = document.getElementById('eventCalendarBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    const starts = eventsList.map(e => new Date(e.startDate)).filter(d => !isNaN(d));
+    const ends = eventsList.map(e => new Date(e.endDate || e.startDate)).filter(d => !isNaN(d));
+    if (starts.length === 0) return;
+    const start = new Date(Math.min.apply(null, starts));
+    const end = ends.length ? new Date(Math.max.apply(null, ends)) : new Date(start);
+
+    const gridStart = new Date(start);
+    gridStart.setDate(start.getDate() - start.getDay());
+    const gridEnd = new Date(end);
+    gridEnd.setDate(end.getDate() + (6 - end.getDay()));
+
+    const idSet = new Set(eventsList.map(e => e.id));
+    const all = normalizeLegacyTaskings(loadTaskings()).filter(t => idSet.has(t.eventId));
+    let cursor = new Date(gridStart);
+    while (cursor <= gridEnd) {
+        const tr = document.createElement('tr');
+        for (let d = 0; d < 7; d++) {
+            const td = document.createElement('td');
+            const dateStr = cursor.toISOString().split('T')[0];
+            const inAnyEvent = eventsList.some(ev => isDateWithinRange(dateStr, ev.startDate, ev.endDate || ev.startDate));
+            const dayDiv = document.createElement('div');
+            dayDiv.className = `calendar-day ${inAnyEvent ? '' : 'muted'}`;
+            const dateLabel = document.createElement('div');
+            dateLabel.className = 'calendar-date';
+            dateLabel.textContent = String(cursor.getDate());
+            dayDiv.appendChild(dateLabel);
+            const dayTasks = all.filter(t => isDateWithinRange(dateStr, t.startDate, t.endDate));
+            dayTasks.sort((a,b) => (a.start || '').localeCompare(b.start || ''));
+            dayTasks.forEach(t => {
+                const chip = document.createElement('a');
+                chip.href = 'javascript:void(0)';
+                chip.className = 'task-chip';
+                const timeRange = (t.start || t.end) ? `${t.start || ''}${t.end ? ' - ' + t.end : ''}` : '';
+                const firstNames = (t.officerNames || (t.officerName ? [t.officerName] : [])).map(n => (n || '').split(' ')[0]).join(', ');
+                chip.title = `${t.title}${timeRange ? ` • ${timeRange}` : ''}${t.location ? `\n${t.location}` : ''}`.trim();
+                chip.textContent = `${t.start ? t.start + ' ' : ''}${t.title} — ${firstNames}`;
+                if (t.done) {
+                    chip.classList.add('text-decoration-line-through','text-muted');
+                    chip.title += `\nCompleted`;
+                }
+                chip.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    const modalEl = document.getElementById('eventCalendarModal');
+                    const instance = bootstrap.Modal.getInstance(modalEl);
+                    if (instance) instance.hide();
+                    setTimeout(() => openTaskDetailsModal(t.id), 150);
+                });
+                dayDiv.appendChild(chip);
+            });
+            td.appendChild(dayDiv);
+            tr.appendChild(td);
+            cursor.setDate(cursor.getDate() + 1);
+        }
+        tbody.appendChild(tr);
+    }
 }
 
 function initTaskings() {
@@ -1332,6 +1786,7 @@ function initTaskings() {
     const today = new Date();
     setCalendarTo(today.getFullYear(), today.getMonth());
     renderTaskingsCalendar();
+    renderEventsBar();
 
     document.getElementById('taskingsPrevMonth').addEventListener('click', () => {
         const dt = new Date(calendarYear, calendarMonth - 1, 1);
@@ -1351,6 +1806,9 @@ function initTaskings() {
     document.getElementById('taskingsImportBtn').addEventListener('click', () => document.getElementById('taskingsImportInput').click());
     document.getElementById('taskingsImportInput').addEventListener('change', onImportTaskingsFile);
     document.getElementById('taskingsSyncRepoBtn').addEventListener('click', () => syncTaskingsFromRepo(false));
+    // Events
+    const addEventBtn = document.getElementById('eventsAddBtn');
+    if (addEventBtn) addEventBtn.addEventListener('click', () => openEventsModalForDate(new Date(calendarYear, calendarMonth, 1).toISOString().split('T')[0]));
 
     const form = document.getElementById('taskingsForm');
     form.addEventListener('submit', (e) => {
@@ -1366,6 +1824,7 @@ function openTaskingsModalForDate(dateStr) {
     populateTaskingOfficerLists();
     taskOfficerSelection = new Set();
     document.getElementById('taskId').value = '';
+    document.getElementById('taskEventId').value = '';
     document.getElementById('taskStartDate').value = dateStr;
     document.getElementById('taskEndDate').value = '';
     resetChecklistUI([]);
@@ -1382,6 +1841,7 @@ function openTaskingsModalForEdit(taskId) {
     populateTaskingOfficerLists();
     taskOfficerSelection = new Set(n.officerIds || (n.officerId ? [n.officerId] : []));
     document.getElementById('taskId').value = n.id;
+    document.getElementById('taskEventId').value = n.eventId || '';
     document.getElementById('taskStartDate').value = n.startDate || '';
     document.getElementById('taskEndDate').value = n.endDate || '';
     // Mark officer checkboxes as selected
@@ -1403,6 +1863,7 @@ function saveTaskingFromForm() {
     const startDate = document.getElementById('taskStartDate').value;
     const endDateRaw = document.getElementById('taskEndDate').value;
     const endDate = endDateRaw || startDate;
+    const eventId = document.getElementById('taskEventId').value || '';
     const selectedOfficerIds = getCurrentSelectedOfficerIds();
     const title = document.getElementById('taskTitle').value.trim();
     const start = document.getElementById('taskStartTime').value;
@@ -1421,7 +1882,7 @@ function saveTaskingFromForm() {
 
     const items = loadTaskings();
     const existingIdx = items.findIndex(x => x.id === id);
-    const record = { id, startDate, endDate, officerIds: selectedOfficerIds, officerNames, title, start, end, location, notes, checklist };
+    const record = { id, eventId: eventId || undefined, startDate, endDate, officerIds: selectedOfficerIds, officerNames, title, start, end, location, notes, checklist };
     if (existingIdx >= 0) items[existingIdx] = record; else items.push(record);
     saveTaskings(items);
     taskOfficerSelection = new Set();
@@ -1477,6 +1938,269 @@ function normalizeLegacyTaskings(list) {
         }
         return t;
     });
+}
+
+// =====================
+// Events (container UI)
+// =====================
+function openEventsModalForDate(dateStr) {
+    const form = document.getElementById('eventsForm');
+    form.reset();
+    document.getElementById('eventId').value = '';
+    document.getElementById('eventStartDate').value = dateStr;
+    document.getElementById('eventEndDate').value = '';
+    const list = document.getElementById('eventSubtasks');
+    list.innerHTML = '';
+    // Bootstrap modal
+    const modal = new bootstrap.Modal(document.getElementById('eventsModal'));
+    modal.show();
+}
+
+function openEventsModalForEdit(eventId) {
+    const ev = getEventById(eventId);
+    if (!ev) return;
+    const form = document.getElementById('eventsForm');
+    form.reset();
+    document.getElementById('eventId').value = ev.id;
+    document.getElementById('eventTitle').value = ev.title || '';
+    document.getElementById('eventStartDate').value = ev.startDate || '';
+    document.getElementById('eventEndDate').value = ev.endDate || '';
+    document.getElementById('eventLocation').value = ev.location || '';
+    document.getElementById('eventNotes').value = ev.notes || '';
+    // Prefill subtasks with current event's taskings
+    const list = document.getElementById('eventSubtasks');
+    list.innerHTML = '';
+    const tasks = normalizeLegacyTaskings(loadTaskings()).filter(t => t.eventId === ev.id);
+    if (tasks.length === 0) {
+        // empty state
+    } else {
+        tasks.forEach(t => addSubtaskBlock({ title: t.title, start: t.start, end: t.end, officerIds: t.officerIds || [] }));
+    }
+    const modal = new bootstrap.Modal(document.getElementById('eventsModal'));
+    modal.show();
+}
+
+function addSubtaskBlock(defaults) {
+    const officers = loadOfficers();
+    const container = document.createElement('div');
+    container.className = 'border rounded p-2';
+    container.innerHTML = `
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <strong>Tasking</strong>
+        <button type="button" class="btn btn-sm btn-outline-danger eventRemoveSubtask">Remove</button>
+      </div>
+      <div class="row g-2 mb-2">
+        <div class="col-md-6">
+          <input type="text" class="form-control eventTaskTitle" placeholder="Task title" required />
+        </div>
+        <div class="col-md-3">
+          <input type="time" class="form-control eventTaskStart" placeholder="Start time" />
+        </div>
+        <div class="col-md-3">
+          <input type="time" class="form-control eventTaskEnd" placeholder="End time" />
+        </div>
+      </div>
+      <div class="row g-2 mb-2">
+        <div class="col-12">
+          <input type="text" class="form-control form-control-sm eventTaskNotes" placeholder="Notes (optional)" />
+        </div>
+      </div>
+      <div class="mb-2">
+        <label class="form-label mb-1">Checklist</label>
+        <div class="input-group input-group-sm mb-2">
+          <input type="text" class="form-control eventChecklistInput" placeholder="Add checklist item..." />
+          <button type="button" class="btn btn-outline-primary eventChecklistAdd">Add</button>
+        </div>
+        <ul class="list-group eventChecklistList"></ul>
+      </div>
+      <div class="mb-2">
+        <div class="small text-muted mb-1">Assign officers</div>
+        <div class="dropdown">
+          <button class="btn btn-sm btn-outline-secondary dropdown-toggle eventOfficerDropdownToggle" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">Select officers</button>
+          <div class="dropdown-menu p-2 eventOfficerDropdown" style="width:320px; max-height:320px; overflow:auto;">
+            <input type="text" class="form-control form-control-sm mb-2 eventOfficerSearch" placeholder="Search officers..." />
+            <div class="form-check mb-2">
+              <input class="form-check-input eventOfficerSelectAll" type="checkbox" id=""> <label class="form-check-label">Select all visible</label>
+            </div>
+            <div class="eventOfficerList"></div>
+          </div>
+        </div>
+        <div class="small text-muted mt-1 eventOfficerSummary"></div>
+      </div>
+    `;
+    if (defaults) {
+        container.querySelector('.eventTaskTitle').value = defaults.title || '';
+        container.querySelector('.eventTaskStart').value = defaults.start || '';
+        container.querySelector('.eventTaskEnd').value = defaults.end || '';
+        container.querySelector('.eventTaskNotes').value = defaults.notes || '';
+    }
+    container.querySelector('.eventRemoveSubtask').onclick = () => container.remove();
+    
+    // Build dropdown list with search and select-all
+    const selected = new Set(Array.isArray(defaults?.officerIds) ? defaults.officerIds : []);
+    const listEl = container.querySelector('.eventOfficerList');
+    const searchEl = container.querySelector('.eventOfficerSearch');
+    const selectAllEl = container.querySelector('.eventOfficerSelectAll');
+    const summaryEl = container.querySelector('.eventOfficerSummary');
+    const toggleBtn = container.querySelector('.eventOfficerDropdownToggle');
+
+    function updateSummary() {
+        const names = officers.filter(o => selected.has(o.studentId)).map(o => o.studentName);
+        const count = names.length;
+        toggleBtn.textContent = count > 0 ? `Assigned (${count})` : 'Select officers';
+        summaryEl.textContent = count > 0 ? names.slice(0, 3).join(', ') + (count > 3 ? `, +${count-3} more` : '') : '';
+    }
+
+    function renderList() {
+        const term = (searchEl.value || '').toLowerCase().trim();
+        const filteredOfficers = officers.filter(o => o.studentName.toLowerCase().includes(term));
+        listEl.innerHTML = '';
+        filteredOfficers.forEach(o => {
+            const label = document.createElement('label');
+            label.className = 'form-check d-flex align-items-center gap-2 mb-1';
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.className = 'form-check-input eventOfficerCbx';
+            cb.value = o.studentId;
+            cb.checked = selected.has(o.studentId);
+            const span = document.createElement('span');
+            span.textContent = o.studentName;
+            label.appendChild(cb); label.appendChild(span);
+            cb.addEventListener('change', () => {
+                if (cb.checked) selected.add(o.studentId); else selected.delete(o.studentId);
+                updateSummary();
+                const allChecked = filteredOfficers.every(x => selected.has(x.studentId));
+                selectAllEl.checked = filteredOfficers.length > 0 && allChecked;
+            });
+            listEl.appendChild(label);
+        });
+        selectAllEl.checked = filteredOfficers.length > 0 && filteredOfficers.every(x => selected.has(x.studentId));
+    }
+
+    searchEl.addEventListener('input', renderList);
+    selectAllEl.addEventListener('change', () => {
+        const term = (searchEl.value || '').toLowerCase().trim();
+        const filteredOfficers = officers.filter(o => o.studentName.toLowerCase().includes(term));
+        if (selectAllEl.checked) filteredOfficers.forEach(o => selected.add(o.studentId));
+        else filteredOfficers.forEach(o => selected.delete(o.studentId));
+        renderList();
+        updateSummary();
+    });
+    toggleBtn.addEventListener('click', () => setTimeout(() => searchEl.focus(), 200));
+
+    renderList();
+    updateSummary();
+
+    // Checklist handlers
+    const checklistList = container.querySelector('.eventChecklistList');
+    const checklistInput = container.querySelector('.eventChecklistInput');
+    const checklistAddBtn = container.querySelector('.eventChecklistAdd');
+    function addChecklistItem(text, done) {
+        if (!text) return;
+        const li = document.createElement('li');
+        li.className = 'list-group-item d-flex align-items-center justify-content-between';
+        const left = document.createElement('div');
+        left.className = 'd-flex align-items-center gap-2';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'form-check-input';
+        cb.checked = !!done;
+        const span = document.createElement('span');
+        span.textContent = text;
+        if (cb.checked) span.classList.add('text-decoration-line-through','text-muted');
+        cb.addEventListener('change', () => {
+            if (cb.checked) span.classList.add('text-decoration-line-through','text-muted');
+            else span.classList.remove('text-decoration-line-through','text-muted');
+        });
+        left.appendChild(cb); left.appendChild(span);
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'btn btn-sm btn-outline-danger';
+        del.textContent = 'Remove';
+        del.addEventListener('click', () => li.remove());
+        li.appendChild(left); li.appendChild(del);
+        checklistList.appendChild(li);
+    }
+    checklistAddBtn.addEventListener('click', () => {
+        const t = checklistInput.value.trim();
+        if (!t) return;
+        addChecklistItem(t, false);
+        checklistInput.value = '';
+        checklistInput.focus();
+    });
+    (defaults?.checklist || []).forEach(it => addChecklistItem(it.text || '', !!it.done));
+
+    document.getElementById('eventSubtasks').appendChild(container);
+}
+
+document.addEventListener('click', (e) => {
+    if (e.target && e.target.id === 'eventAddSubtaskBtn') {
+        addSubtaskBlock();
+    }
+});
+
+document.addEventListener('submit', (e) => {
+    if (e.target && e.target.id === 'eventsForm') {
+        e.preventDefault();
+        saveEventFromForm();
+    }
+});
+
+function saveEventFromForm() {
+    const id = document.getElementById('eventId').value || cryptoRandomId();
+    const title = document.getElementById('eventTitle').value.trim();
+    const startDate = document.getElementById('eventStartDate').value;
+    const endDate = document.getElementById('eventEndDate').value || startDate;
+    const location = document.getElementById('eventLocation').value.trim();
+    const notes = document.getElementById('eventNotes').value.trim();
+    if (!title || !startDate) { alert('Please provide event title and date.'); return; }
+
+    // Save event object
+    const events = loadEvents();
+    const evIdx = events.findIndex(e => e.id === id);
+    const evRecord = { id, title, startDate, endDate, location, notes };
+    if (evIdx >= 0) events[evIdx] = evRecord; else events.push(evRecord);
+    saveEvents(events);
+
+    // Collect subtasks and create taskings
+    const subblocks = Array.from(document.querySelectorAll('#eventSubtasks > div'));
+    if (subblocks.length > 0) {
+        subblocks.forEach(block => {
+            const tTitle = block.querySelector('.eventTaskTitle').value.trim() || title;
+            const tStart = block.querySelector('.eventTaskStart').value;
+            const tEnd = block.querySelector('.eventTaskEnd').value;
+            const tNotes = block.querySelector('.eventTaskNotes')?.value.trim() || '';
+            // Collect selected officer IDs from dropdown selection state
+            const selectedIds = new Set(Array.from(block.querySelectorAll('.eventOfficerList .eventOfficerCbx'))
+                .filter(cb => cb.checked).map(cb => cb.value));
+            const officerIds = Array.from(selectedIds);
+            const checklist = Array.from(block.querySelectorAll('.eventChecklistList > li')).map(li => {
+                const cb = li.querySelector('input[type="checkbox"]');
+                const span = li.querySelector('span');
+                return { text: span ? span.textContent : '', done: !!(cb && cb.checked) };
+            });
+            createOrUpdateTasking({
+                id: cryptoRandomId(), eventId: id, startDate, endDate, officerIds,
+                title: tTitle, start: tStart, end: tEnd, location, notes: tNotes, checklist
+            });
+        });
+    } else {
+        // No subtask added; still persist the event without creating any taskings
+    }
+
+    renderTaskingsCalendar();
+    renderEventsBar();
+    bootstrap.Modal.getInstance(document.getElementById('eventsModal')).hide();
+}
+
+function createOrUpdateTasking(record) {
+    const officers = loadOfficers();
+    const officerNames = (record.officerIds || []).map(id => (officers.find(o => o.studentId === id)?.studentName || id));
+    const items = loadTaskings();
+    const idx = items.findIndex(x => x.id === record.id);
+    const normalized = { ...record, officerNames };
+    if (idx >= 0) items[idx] = normalized; else items.push(normalized);
+    saveTaskings(items);
 }
 
 function openTaskDetailsModal(taskId) {
@@ -1813,6 +2537,11 @@ async function findLatestTaskingsUrl() {
         if (!existing || existing.length === 0) {
             // fire and forget, do not block UI
             syncTaskingsFromRepo(false);
+        }
+        const officers = loadOfficers();
+        if (!officers || officers.length === 0) {
+            // try to pull officers from Database/* when hosted
+            syncOfficersFromRepo();
         }
     } catch {}
 })();
