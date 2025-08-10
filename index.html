@@ -2533,21 +2533,13 @@ async function findLatestTaskingsUrl() {
 // On first load, if there are no local taskings, attempt auto-sync from repo
 (function autoSyncIfEmpty(){
     try {
-        const existing = loadTaskings();
-        if (!existing || existing.length === 0) {
-            // fire and forget, do not block UI
-            syncTaskingsFromRepo(false);
-        }
-        const officers = loadOfficers();
-        if (!officers || officers.length === 0) {
-            // try to pull officers from Database/* when hosted
-            syncOfficersFromRepo();
-        }
+        // Always prefer database over local for taskings
+        syncTaskingsFromRepo(true);
+        // Always prefer database over local for officers
+        syncOfficersFromRepo();
         // If there are no duty logs yet, try to hydrate from Database/all-duty-logs-YYYY-MM-DD.xlsx
-        const hasAnyLogs = listAllLogDateKeys().length > 0;
-        if (!hasAnyLogs) {
-            syncAllDutyLogsFromRepo();
-        }
+        // Always prefer database over local for duty logs
+        syncAllDutyLogsFromRepo(true);
     } catch {}
 })();
 
@@ -2568,7 +2560,7 @@ function clearSyncStatus() {
 // ============================
 // Sync All Duty Logs from repo
 // ============================
-async function syncAllDutyLogsFromRepo() {
+async function syncAllDutyLogsFromRepo(replace) {
     try {
         const url = await findLatestAllDutyLogsUrl();
         if (!url) return false;
@@ -2625,12 +2617,24 @@ async function syncAllDutyLogsFromRepo() {
                 logsByDate[logDate].push(logEntry);
             }
         }
+        if (replace) {
+            // Clear all existing dutyLogs-* keys
+            const toDelete = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k && k.startsWith('dutyLogs-')) toDelete.push(k);
+            }
+            toDelete.forEach(k => localStorage.removeItem(k));
+        }
+
         Object.keys(logsByDate).forEach(dateStr => {
             const [year, month, day] = dateStr.split('-').map(Number);
             const key = `dutyLogs-${year}-${month}-${day}`;
-            const existingLogs = loadLogsByKey(key);
-            const mergedLogs = [...existingLogs, ...logsByDate[dateStr]];
-            localStorage.setItem(key, JSON.stringify(mergedLogs));
+            const data = replace ? logsByDate[dateStr] : (() => {
+                const existingLogs = loadLogsByKey(key);
+                return [...existingLogs, ...logsByDate[dateStr]];
+            })();
+            localStorage.setItem(key, JSON.stringify(data));
         });
         initHistoryDatePicker();
         renderHistory();
